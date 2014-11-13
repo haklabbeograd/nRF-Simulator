@@ -113,6 +113,36 @@ byte * nRF24l01plus::read_register(byte * read_command)
     byte addr = *read_command & 0b00011111;
     return (byte*)register_array[addr];
 }
+
+void nRF24l01plus::write_register(byte* bytes_to_write)
+{
+    byte addr = bytes_to_write[0] & 0b00011111;
+    //no write to these registers
+
+    if( (addr == eOBSERVE_TX)||(addr == eRPD)||(addr == eFIFO_STATUS) )return;
+
+    byte * where_to_write = (byte*)register_array[addr];
+
+    if(addr!=eSTATUS)
+        where_to_write[0] = bytes_to_write[1];
+    else
+        where_to_write[0] = (where_to_write[0] & 0b00001111) | (bytes_to_write[1] & 0b11110000);
+
+    printf("\nBYTE TO WRITE[0]: %X",bytes_to_write[1]);
+    printf("\nBYTE WRITTEN[0]: %X",where_to_write[0]);
+    if( (addr == eRX_ADDR_P0) ||  (addr == eRX_ADDR_P1) || (addr == eTX_ADDR))
+    {
+        where_to_write[1] = bytes_to_write[2];
+        where_to_write[2] = bytes_to_write[3];
+        where_to_write[3] = bytes_to_write[4];
+        where_to_write[4] = bytes_to_write[5];
+        printf("\nBYTE TO WRITE[1]: %X",where_to_write[1]);
+        printf("\nBYTE TO WRITE[2]: %X",where_to_write[2]);
+        printf("\nBYTE TO WRITE[3]: %X",where_to_write[3]);
+        printf("\nBYTE TO WRITE[4]: %X",where_to_write[4]);
+    }
+}
+
 nRF24l01plus::nRF24l01plus()
 {
     //ctor
@@ -170,31 +200,116 @@ void nRF24l01plus::Spi_Write(byte * msg,byte * msgBack)
     byte * read_reg;
     commands theCommand = get_command(msg[0]);
     byte addr = msg[0] & 0b00011111;
+    tMsgFrame * tempMsgFrame = NULL;
+
+    printf("\n\nCOMMAND SENT: %X",msg[0]);
     switch(theCommand)
     {
     case eR_REGISTER:
         read_reg = read_register(msg); //load the register into temp read_reg
         if(read_reg == NULL)break;
+        msgBack[1]=read_reg[0];
+        printf("\nREAD BYTE[0]: %X",msgBack[1]);
         if( (addr == eRX_ADDR_P0) || (addr == eRX_ADDR_P1) || addr == eTX_ADDR)
         {
-            msgBack[1]=read_reg[0];
             msgBack[2]=read_reg[1];
             msgBack[3]=read_reg[2];
             msgBack[4]=read_reg[3];
             msgBack[5]=read_reg[4];
-            msgBack[6]=read_reg[5];
+            printf("\nREAD BYTE[1]: %X",msgBack[2]);
+            printf("\nREAD BYTE[2]: %X",msgBack[3]);
+            printf("\nREAD BYTE[3]: %X",msgBack[4]);
+            printf("\nREAD BYTE[4]: %X",msgBack[5]);
         }
-        else
+        break;
+    case eW_REGISTER:
+        write_register(msg);
+        break;
+    case eR_RX_PL_WID:
+        msgBack[1] = read_RX_payload_width();
+        break;
+    case eR_RX_PAYLOAD:
+        tempMsgFrame = read_RX_payload();
+        if(tempMsgFrame != NULL)
         {
-            msgBack[1]=read_reg[0];
+            for (int i = 0;i<tempMsgFrame->Packet_Control_Field.Payload_length;i++)
+            {
+                msgBack[i+1] = tempMsgFrame->Payload[i];
+            }
+            delete tempMsgFrame;
         }
+        break;
+    case eFLUSH_RX:
+        flush_rx();
         break;
     default:
+    case eNOP:
         break;
     }
+
     byte statusCMD = eSTATUS;
     read_reg = read_register(&statusCMD);
     msgBack[0] = read_reg[0];
+    printf("\nSTATUS: %X",msgBack[0]);
+}
+
+bool nRF24l01plus::receve_frame(tMsgFrame * theFrame)
+{
+    /*********check if buffer is full*******/
+    if(REGISTERS.FIFO_STATUS.RX_FULL)return false;
+
+    /******frame creation*******************/
+    tMsgFrame * newFrame = new tMsgFrame;
+    newFrame->Address = theFrame->Address;
+    newFrame->Packet_Control_Field = theFrame->Packet_Control_Field;
+    for(int i = 0; i < theFrame->Packet_Control_Field.Payload_length; i++)
+    {
+        newFrame->Payload[i] = theFrame->Payload[i];
+    }
+
+    /********push into RX FIFO*******/
+    RX_FIFO.push(newFrame);
+    if(RX_FIFO.size() == 3)REGISTERS.FIFO_STATUS.RX_FULL = 1;
+
+    REGISTERS.STATUS.RX_DR = 1;
+    //tranzmit ack
+    return true;
+}
+
+uint8_t nRF24l01plus::read_RX_payload_width()
+{
+    if(REGISTERS.FIFO_STATUS.RX_EMPTY)return 0;
+
+    return RX_FIFO.front()->Packet_Control_Field.Payload_length;
+}
+
+tMsgFrame * nRF24l01plus::read_RX_payload()
+{
+    if(REGISTERS.CONFIG.PRIM_RX == 1)
+    {
+        if(RX_FIFO.empty())return NULL;
+        tMsgFrame * temp = RX_FIFO.front();
+        RX_FIFO.pop();
+        if(RX_FIFO.empty())REGISTERS.FIFO_STATUS.RX_EMPTY = 1;
+        REGISTERS.FIFO_STATUS.RX_FULL = 0;
+        return temp;
+    }
+    return NULL;
+}
+
+void nRF24l01plus::flush_rx()
+{/*****chec if device is in RX mode*/
+    if(REGISTERS.CONFIG.PRIM_RX == 1)
+    {
+        while(RX_FIFO.size())
+        {
+            tMsgFrame * temp = RX_FIFO.front();
+            RX_FIFO.pop();
+            delete temp;
+        }
+        REGISTERS.FIFO_STATUS.RX_EMPTY = 1;
+        REGISTERS.FIFO_STATUS.RX_FULL = 0;
+    }
 }
 
 void nRF24l01plus::printRegContents()

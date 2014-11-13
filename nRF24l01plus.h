@@ -2,8 +2,8 @@
 #define NRF24L01PLUS_H
 
 #include <stdint.h>
-#include "nRF24registers.h"
 #include "nRF24bits_struct.h"
+#include <queue>
 
 typedef uint16_t word;
 typedef uint8_t byte;
@@ -31,23 +31,27 @@ class nRF24l01plus
         void init_registers(void);//alocates memmory for registers
         void clear_registers(void);//frees memmory for registers
         byte * read_register(byte * read_command);
-        byte * write_register(byte * bytes_to_write);
-        byte * read_RX_payload();
+        void write_register(byte * bytes_to_write);
+        tMsgFrame * read_RX_payload();
         byte * write_TX_payload(byte * bytes_to_write);
-        byte * flush_tx();
-        byte * flush_rx();
+        void flush_tx();
+        void flush_rx();
         byte * reuse_tx_payload();
-        byte * read_width_of_head_payload();
+        uint8_t read_RX_payload_width();
         byte * write_ack_payload(byte * bytes_to_write);
         byte * write_tx_payload_no_ack(byte * bytes_to_write);
         byte * nop();
         commands get_command(byte command);
+
         //interface registers
         void * register_array[0x1E];
         tREGISTERS REGISTERS;
+        std::queue<tMsgFrame*> RX_FIFO;
+
     public:
         void Spi_Write(byte * msg,byte * msgBack);
         void printRegContents();
+        bool receve_frame(tMsgFrame * theFrame);
 };
 
 #endif // NRF24L01PLUS_H
