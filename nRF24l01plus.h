@@ -33,25 +33,37 @@ class nRF24l01plus
         byte * read_register(byte * read_command);
         void write_register(byte * bytes_to_write);
         tMsgFrame * read_RX_payload();
-        byte * write_TX_payload(byte * bytes_to_write);
+        void write_TX_payload(byte * bytes_to_write);
+        void write_ack_payload(byte * bytes_to_write);
         void flush_tx();
         void flush_rx();
+        byte addressToPype(uint64_t address);
         byte * reuse_tx_payload();
         uint8_t read_RX_payload_width();
-        byte * write_ack_payload(byte * bytes_to_write);
+
         byte * write_tx_payload_no_ack(byte * bytes_to_write);
         byte * nop();
         commands get_command(byte command);
+        void send_frame(tMsgFrame * theFrame);
 
         //interface registers
         void * register_array[0x1E];
         tREGISTERS REGISTERS;
         std::queue<tMsgFrame*> RX_FIFO;
+        std::queue<tMsgFrame*> TX_FIFO;
+        bool CE;
+        uint8_t lastPID;
 
     public:
         void Spi_Write(byte * msg,byte * msgBack);
         void printRegContents();
         bool receve_frame(tMsgFrame * theFrame);
+        bool checkIRQ();
+
+        void setCE_HIGH(){CE = true;}
+        void setCE_LOW(){CE = false;}
+        bool getCE(){return CE;}
+
 };
 
 #endif // NRF24L01PLUS_H

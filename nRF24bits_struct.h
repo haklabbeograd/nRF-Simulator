@@ -157,7 +157,7 @@ typedef struct sPACKET_CONTROL_FIELD
 
 typedef struct sFRAME
 {
-    uint64_t Address:40;
+    uint64_t Address;
     tPACKET_CONTROL_FIELD Packet_Control_Field;
     uint8_t Payload[32];
 }tMsgFrame;
