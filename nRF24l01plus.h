@@ -35,8 +35,11 @@ class nRF24l01plus
         tMsgFrame * read_RX_payload();
         void write_TX_payload(byte * bytes_to_write);
         void write_ack_payload(byte * bytes_to_write);
+        void write_no_ack_payload(byte * bytes_to_write);
+        tMsgFrame * get_ack_packet_for_pipe(uint8_t pipe);
         void flush_tx();
         void flush_rx();
+        void reuse_last_transmited_payload();
         byte addressToPype(uint64_t address);
         byte * reuse_tx_payload();
         uint8_t read_RX_payload_width();
@@ -46,14 +49,17 @@ class nRF24l01plus
         void send_frame(tMsgFrame * theFrame);
 
         //interface registers
-        void * register_array[0x1E];
+
         tREGISTERS REGISTERS;
         std::queue<tMsgFrame*> RX_FIFO;
         std::queue<tMsgFrame*> TX_FIFO;
         bool CE;
         uint8_t PID;
+        bool REUSE_TX_PL;
+        void * register_array[0x1E];
         tMsgFrame * lastTransmited;
-        tMsgFrame * assemble_ack_packet();
+
+
 
         //Eather interface placeholders
         void send_to_eathar(tMsgFrame * theFrame);

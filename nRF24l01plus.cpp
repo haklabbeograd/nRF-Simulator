@@ -142,8 +142,8 @@ void nRF24l01plus::write_register(byte* bytes_to_write)
         }
     }
 }
-
-nRF24l01plus::nRF24l01plus():CE(false)
+//constructor
+nRF24l01plus::nRF24l01plus():CE(false),PID(0),REUSE_TX_PL(false),lastTransmited(NULL)
 {
     //ctor
     init_registers();
@@ -317,8 +317,8 @@ bool nRF24l01plus::receve_frame(tMsgFrame * theFrame)
 
 uint8_t nRF24l01plus::read_RX_payload_width()
 {
-    tMsgFrame * temp = RX_FIFO.front();
     if(REGISTERS.FIFO_STATUS.RX_EMPTY)return 0;
+    tMsgFrame * temp = RX_FIFO.front();
 
     return temp->Packet_Control_Field.Payload_length;
 }
@@ -352,7 +352,7 @@ void nRF24l01plus::write_TX_payload(byte * bytes_to_write)
     if(REGISTERS.FIFO_STATUS.TX_FULL)return;
     tMsgFrame * newFrame = new tMsgFrame;
     int i = 1;
-    while( (bytes_to_write[i]!= 0) && (i < 32) )
+    while( (bytes_to_write[i]!= 0) && (i < 33) )
     {//writes all the bytes into the payload
         newFrame->Payload[i-1] = bytes_to_write[i];
         i++;
@@ -372,8 +372,36 @@ void nRF24l01plus::write_TX_payload(byte * bytes_to_write)
         REGISTERS.FIFO_STATUS.TX_FULL = 1;
         REGISTERS.STATUS.TX_FULL = 1;
     }
+    REUSE_TX_PL = false;
 }
 
+void nRF24l01plus::write_no_ack_payload(byte * bytes_to_write)
+{
+    if(!REGISTERS.FEATURE.EN_DYN_ACK)return;
+    if(REGISTERS.FIFO_STATUS.TX_FULL)return;
+    tMsgFrame * newFrame = new tMsgFrame;
+    int i = 1;
+    while( (bytes_to_write[i]!= 0) && (i < 33) )
+    {//writes all the bytes into the payload
+        newFrame->Payload[i-1] = bytes_to_write[i];
+        i++;
+    }
+    //Set PCF payload length
+    newFrame->Packet_Control_Field.Payload_length = i;
+    //Set NO_ACK flag to zero (request ACK);
+    newFrame->Packet_Control_Field.NP_ACK=1;
+    //Set PID                            //76543210
+    newFrame->Packet_Control_Field.PID = 0b00000011 & PID++;
+    //Set Address
+    newFrame->Address = *( (uint64_t*)register_array[eTX_ADDR] );
+    TX_FIFO.push(newFrame);
+    REGISTERS.FIFO_STATUS.TX_EMPTY = 0;
+    if(TX_FIFO.size() == 3)
+    {
+        REGISTERS.FIFO_STATUS.TX_FULL = 1;
+        REGISTERS.STATUS.TX_FULL = 1;
+    }
+}
 void nRF24l01plus::write_ack_payload(byte * bytes_to_write)
 {
     //check if tx fifo is full
@@ -484,12 +512,86 @@ void nRF24l01plus::flush_tx()
         REGISTERS.FIFO_STATUS.TX_EMPTY = 1;
         REGISTERS.STATUS.TX_FULL = 0;
         if(lastTransmited != NULL) delete lastTransmited;
+        REUSE_TX_PL = false;
     }
 }
-
-tMsgFrame * nRF24l01plus::assemble_ack_packet(void)
+void nRF24l01plus::reuse_last_transmited_payload(void)
 {
+    REUSE_TX_PL = true;
+}
 
+tMsgFrame * nRF24l01plus::get_ack_packet_for_pipe(uint8_t pipe)
+{
+    //feature not enabled
+    if(!REGISTERS.FEATURE.EN_DYN_ACK) return NULL;
+    //No ACK payload saved in TX fifo (tx fifo empty)
+    if(REGISTERS.FIFO_STATUS.TX_EMPTY) return NULL;
+    uint64_t pipe_address = 0;
+    uint8_t last_byte = 0;
+    switch(pipe)
+    {
+    case 0:
+        if(REGISTERS.EN_RXADDR.ERX_P0 && REGISTERS.EN_AA.ENAA_P0)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P0]);
+        }
+        break;
+    case 1:
+        if(REGISTERS.EN_RXADDR.ERX_P1 && REGISTERS.EN_AA.ENAA_P1)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+        }
+        break;
+    case 2:
+        if(REGISTERS.EN_RXADDR.ERX_P2 && REGISTERS.EN_AA.ENAA_P2)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P2]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    case 3:
+        if(REGISTERS.EN_RXADDR.ERX_P3 && REGISTERS.EN_AA.ENAA_P3)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P3]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    case 4:
+        if(REGISTERS.EN_RXADDR.ERX_P4 && REGISTERS.EN_AA.ENAA_P4)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P4]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    case 5:
+        if(REGISTERS.EN_RXADDR.ERX_P5 && REGISTERS.EN_AA.ENAA_P5)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P5]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    default:
+        return NULL;
+    }
+    //test address loaded, check through TX fifo for a match.
+    tMsgFrame * the_ack_payload = NULL;
+    for(uint8_t i = 0; i < TX_FIFO.size(); i++)
+    {
+        tMsgFrame * temp = TX_FIFO.front();
+        //checking code here
+        if(pipe_address == temp->Address)
+        {//only load first
+            if(the_ack_payload == NULL)
+                the_ack_payload = temp;
+        }
+        TX_FIFO.pop();
+        TX_FIFO.push(temp);
+    }
+    return the_ack_payload;
 }
 
 void nRF24l01plus::printRegContents()
