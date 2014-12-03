@@ -285,7 +285,7 @@ bool nRF24l01plus::receve_frame(tMsgFrame * theFrame)
 {
     /*********check if buffer is full*******/
     if(REGISTERS.FIFO_STATUS.RX_FULL == true)return false;
-    /************chec if chip enable is set**/
+    /************check if chip enable is set**/
     if(CE == false)return false;
     /*************Check if in RX mode*********/
     if(REGISTERS.CONFIG.PRIM_RX == 0)return false;
@@ -314,7 +314,7 @@ bool nRF24l01plus::receve_frame(tMsgFrame * theFrame)
     //tranzmit ack
     return true;
 }
-//fix
+
 uint8_t nRF24l01plus::read_RX_payload_width()
 {
     tMsgFrame * temp = RX_FIFO.front();
@@ -349,6 +349,7 @@ tMsgFrame * nRF24l01plus::read_RX_payload()
 
 void nRF24l01plus::write_TX_payload(byte * bytes_to_write)
 {
+    if(REGISTERS.FIFO_STATUS.TX_FULL)return;
     tMsgFrame * newFrame = new tMsgFrame;
     int i = 1;
     while( (bytes_to_write[i]!= 0) && (i < 32) )
@@ -356,8 +357,102 @@ void nRF24l01plus::write_TX_payload(byte * bytes_to_write)
         newFrame->Payload[i-1] = bytes_to_write[i];
         i++;
     }
-    newFrame->Packet_Control_Field.Payload_length = i;//uvek je ovako :D:D:D:D:D:D:D:D:D:D:D::D
+    //Set PCF payload length
+    newFrame->Packet_Control_Field.Payload_length = i;
+    //Set NO_ACK flag to zero (request ACK);
+    newFrame->Packet_Control_Field.NP_ACK=0;
+    //Set PID                            //76543210
+    newFrame->Packet_Control_Field.PID = 0b00000011 & PID++;
+    //Set Address
+    newFrame->Address = *( (uint64_t*)register_array[eTX_ADDR] );
+    TX_FIFO.push(newFrame);
+    REGISTERS.FIFO_STATUS.TX_EMPTY = 0;
+    if(TX_FIFO.size() == 3)
+    {
+        REGISTERS.FIFO_STATUS.TX_FULL = 1;
+        REGISTERS.STATUS.TX_FULL = 1;
+    }
+}
 
+void nRF24l01plus::write_ack_payload(byte * bytes_to_write)
+{
+    //check if tx fifo is full
+    if(REGISTERS.FIFO_STATUS.TX_FULL == 1)return;
+    //check if Dynamic Payload is enabled
+    if(REGISTERS.FEATURE.EN_DPL == 0) return;
+
+    byte pipe = bytes_to_write[0] & 0b00000111; //3 lsb bist are the pype;
+    uint64_t temp64;
+    uint64_t ACK_address;
+    switch(pipe)
+    {
+    case 0:
+        if(REGISTERS.EN_RXADDR.ERX_P0) ACK_address = *( (uint64_t*)register_array[eRX_ADDR_P0] );
+        else return;//PO RX not enabled
+        break;
+    case 1:
+        if(REGISTERS.EN_RXADDR.ERX_P1) ACK_address = *( (uint64_t*)register_array[eRX_ADDR_P1] );
+        else return;//P1 RX not enabled
+        break;
+    case 2:
+        if(REGISTERS.EN_RXADDR.ERX_P2) ACK_address = *( (uint64_t*)register_array[eRX_ADDR_P1] );
+        else return;//P2 RX not enabled
+        temp64 = (uint64_t) ( *( (uint8_t*)(register_array[eRX_ADDR_P2]) ) );
+        ACK_address &= 0xFFFFFF00;
+        temp64 &= 0x000000FF;
+        ACK_address |= temp64;
+        break;
+    case 3:
+        if(REGISTERS.EN_RXADDR.ERX_P3) ACK_address = *( (uint64_t*)register_array[eRX_ADDR_P1] );
+        else return;//P3 RX not enabled
+        temp64 = (uint64_t) ( *( (uint8_t*)(register_array[eRX_ADDR_P3]) ) );
+        ACK_address &= 0xFFFFFF00;
+        temp64 &= 0x000000FF;
+        ACK_address |= temp64;
+        break;
+    case 4:
+        if(REGISTERS.EN_RXADDR.ERX_P4) ACK_address = *( (uint64_t*)register_array[eRX_ADDR_P1] );
+        else return;//P4 RX not enabled
+        temp64 = (uint64_t) ( *( (uint8_t*)(register_array[eRX_ADDR_P4]) ) );
+        ACK_address &= 0xFFFFFF00;
+        temp64 &= 0x000000FF;
+        ACK_address |= temp64;
+        break;
+    case 5:
+        if(REGISTERS.EN_RXADDR.ERX_P5) ACK_address = *( (uint64_t*)register_array[eRX_ADDR_P1] );
+        else return;//P5 RX not enabled
+        temp64 = (uint64_t) ( *( (uint8_t*)(register_array[eRX_ADDR_P5]) ) );
+        ACK_address &= 0xFFFFFF00;
+        temp64 &= 0x000000FF;
+        ACK_address |= temp64;
+        break;
+    default:
+        return;
+    }
+
+    tMsgFrame * newFrame = new tMsgFrame;
+
+    int i = 1;
+    while( (bytes_to_write[i]!= 0) && (i < 32) )
+    {//writes all the bytes into the payload
+        newFrame->Payload[i-1] = bytes_to_write[i];
+        i++;
+    }
+    //Set PCF payload length
+    newFrame->Packet_Control_Field.Payload_length = i;
+    //Set NO_ACK flag to one ( does not request ACK);
+    newFrame->Packet_Control_Field.NP_ACK=1;
+    newFrame->Packet_Control_Field.PID = 0;
+    //Set Address
+    newFrame->Address = ACK_address;
+
+    TX_FIFO.push(newFrame);
+    REGISTERS.FIFO_STATUS.TX_EMPTY = 0;
+    if(TX_FIFO.size() == 3)
+    {
+        REGISTERS.FIFO_STATUS.TX_FULL = 1;
+        REGISTERS.STATUS.TX_FULL = 1;
+    }
 }
 
 void nRF24l01plus::flush_rx()
@@ -373,6 +468,28 @@ void nRF24l01plus::flush_rx()
         REGISTERS.FIFO_STATUS.RX_EMPTY = 1;
         REGISTERS.FIFO_STATUS.RX_FULL = 0;
     }
+}
+
+void nRF24l01plus::flush_tx()
+{/********chec if device is in TX mode*******************/
+    if(REGISTERS.CONFIG.PRIM_RX == 0)
+    {
+        while(TX_FIFO.size())
+        {
+            tMsgFrame * temp = TX_FIFO.front();
+            TX_FIFO.pop();
+            delete temp;
+        }
+        REGISTERS.FIFO_STATUS.TX_FULL = 0;
+        REGISTERS.FIFO_STATUS.TX_EMPTY = 1;
+        REGISTERS.STATUS.TX_FULL = 0;
+        if(lastTransmited != NULL) delete lastTransmited;
+    }
+}
+
+tMsgFrame * nRF24l01plus::assemble_ack_packet(void)
+{
+
 }
 
 void nRF24l01plus::printRegContents()

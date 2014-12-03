@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+#define RX_MODE 1
+#define TX_MODE 0
+
 typedef struct R_CONFIG
 {
     uint8_t PRIM_RX:1;      //0

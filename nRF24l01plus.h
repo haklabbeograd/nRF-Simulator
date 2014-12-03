@@ -41,7 +41,6 @@ class nRF24l01plus
         byte * reuse_tx_payload();
         uint8_t read_RX_payload_width();
 
-        byte * write_tx_payload_no_ack(byte * bytes_to_write);
         byte * nop();
         commands get_command(byte command);
         void send_frame(tMsgFrame * theFrame);
@@ -52,8 +51,12 @@ class nRF24l01plus
         std::queue<tMsgFrame*> RX_FIFO;
         std::queue<tMsgFrame*> TX_FIFO;
         bool CE;
-        uint8_t lastPID;
+        uint8_t PID;
+        tMsgFrame * lastTransmited;
+        tMsgFrame * assemble_ack_packet();
 
+        //Eather interface placeholders
+        void send_to_eathar(tMsgFrame * theFrame);
     public:
         void Spi_Write(byte * msg,byte * msgBack);
         void printRegContents();
@@ -63,7 +66,6 @@ class nRF24l01plus
         void setCE_HIGH(){CE = true;}
         void setCE_LOW(){CE = false;}
         bool getCE(){return CE;}
-
 };
 
 #endif // NRF24L01PLUS_H
