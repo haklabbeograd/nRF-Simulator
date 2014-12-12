@@ -1,7 +1,9 @@
 #include "nRF24interface.h"
 #include <stdio.h>
 #include <string.h>
-nRF24interface::nRF24interface():nRF24registers(),PID(0),REUSE_TX_PL(false),lastTransmited(NULL)
+
+
+nRF24interface::nRF24interface():nRF24registers(),PID(0),sREUSE_TX_PL(false),lastTransmited(NULL)
 {
     //ctor
 }
@@ -48,7 +50,7 @@ commands nRF24interface::get_command(byte command)
     }
 }
 
-void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
+byte nRF24interface::Spi_Write(byte * msg, byte* msgBack)
 {
     //identify the command from the first byte
     byte * read_reg;
@@ -62,18 +64,18 @@ void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
     case eR_REGISTER:
         read_reg = read_register(msg); //load the register into temp read_reg
         if(read_reg == NULL)break;
-        msgBack[1]=read_reg[0];
+        msgBack[0]=read_reg[0];
         printf("\nREAD BYTE[0]: %X",msgBack[1]);
         if( (addr == eRX_ADDR_P0) || (addr == eRX_ADDR_P1) || addr == eTX_ADDR)
         {
-            msgBack[2]=read_reg[1];
-            msgBack[3]=read_reg[2];
-            msgBack[4]=read_reg[3];
-            msgBack[5]=read_reg[4];
-            printf("\nREAD BYTE[1]: %X",msgBack[2]);
-            printf("\nREAD BYTE[2]: %X",msgBack[3]);
-            printf("\nREAD BYTE[3]: %X",msgBack[4]);
-            printf("\nREAD BYTE[4]: %X",msgBack[5]);
+            msgBack[1]=read_reg[1];
+            msgBack[2]=read_reg[2];
+            msgBack[3]=read_reg[3];
+            msgBack[4]=read_reg[4];
+            printf("\nREAD BYTE[1]: %X",msgBack[1]);
+            printf("\nREAD BYTE[2]: %X",msgBack[2]);
+            printf("\nREAD BYTE[3]: %X",msgBack[3]);
+            printf("\nREAD BYTE[4]: %X",msgBack[4]);
         }
         break;
     case eW_REGISTER:
@@ -81,7 +83,7 @@ void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
         break;
     case eR_RX_PL_WID:
 
-        msgBack[1] = read_RX_payload_width();
+        msgBack[0] = read_RX_payload_width();
         break;
     case eR_RX_PAYLOAD:
         tempMsgFrame = read_RX_payload();
@@ -89,7 +91,7 @@ void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
         {
             for (int i = 0;i<tempMsgFrame->Packet_Control_Field.Payload_length;i++)
             {
-                msgBack[i+1] = tempMsgFrame->Payload[i];
+                msgBack[i] = tempMsgFrame->Payload[i];
             }
             delete tempMsgFrame;
         }
@@ -103,8 +105,8 @@ void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
     }
     byte statusCMD = eSTATUS;
     read_reg = read_register(&statusCMD);
-    msgBack[0] = read_reg[0];
-    printf("\nSTATUS: %X",msgBack[0]);
+    printf("\nSTATUS: %X",read_reg[0]);
+    return read_reg[0];
 }
 
 uint8_t nRF24interface::read_RX_payload_width()
@@ -167,7 +169,7 @@ void nRF24interface::write_TX_payload(byte * bytes_to_write)
         setTX_FULL();
         setTX_FULL_IRQ();
     }
-    REUSE_TX_PL = false;
+    sREUSE_TX_PL = false;
 }
 
 void nRF24interface::write_no_ack_payload(byte * bytes_to_write)
@@ -264,12 +266,12 @@ void nRF24interface::flush_tx()
         setTX_EMPTY();
         clearTX_FULL_IRQ();
         if(lastTransmited != NULL) delete lastTransmited;
-        REUSE_TX_PL = false;
+        sREUSE_TX_PL = false;
     }
 }
 void nRF24interface::reuse_last_transmited_payload(void)
 {
-    REUSE_TX_PL = true;
+    sREUSE_TX_PL = true;
 }
 
 tMsgFrame * nRF24interface::get_ack_packet_for_pipe(uint8_t pipe)

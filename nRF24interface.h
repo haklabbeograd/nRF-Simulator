@@ -13,7 +13,7 @@ class nRF24interface : public nRF24registers
         nRF24interface();
         /** Default destructor */
         ~nRF24interface();
-        void Spi_Write(byte * msg,byte * msgBack);
+        byte Spi_Write(byte * msg,byte * msgBack);
         //move to protected
         bool receve_frame(tMsgFrame * theFrame);
     protected:
@@ -37,7 +37,7 @@ class nRF24interface : public nRF24registers
         std::queue<tMsgFrame*> RX_FIFO;
         std::queue<tMsgFrame*> TX_FIFO;
         uint8_t PID;
-        bool REUSE_TX_PL;
+        bool sREUSE_TX_PL;
         tMsgFrame * lastTransmited;
 };
 
