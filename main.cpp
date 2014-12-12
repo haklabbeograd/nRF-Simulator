@@ -3,7 +3,36 @@
 #include <stdint.h>
 #include "nRF24l01plus.h"
 
+/*
+Comentting back storrry
 
+ether should be a list of pointers to receve_frame functions...
+which should copy data over to themselves and return either fail or otherwise..
+
+each brfClass object should have send_frame function which attempts to send a frame onto ehter,
+but ether tells it if it's busy or not...
+
+if(busy) fail;
+else
+{
+    if(setBusy() == FALSE) fail;
+    else
+    {//bussy has been set, you own ethers ass now.
+     coppy over the Frame
+     exit and enjoy the show :D:D:D
+    }
+}
+
+if ether is in one thread...
+
+QT comments
+qthread x;
+x->some_public_func()
+iako definisana u qthread klasi izvrsava se kod u main (pozivajucem thread-u)
+emit signal()
+x->slot()
+se izvrsava u qthreadu.
+*/
 void printBin(byte toPrint)
 {
     int i =8;
