@@ -1,6 +1,6 @@
 #include "nRF24interface.h"
 #include <stdio.h>
-
+#include <string.h>
 nRF24interface::nRF24interface():nRF24registers(),PID(0),REUSE_TX_PL(false),lastTransmited(NULL)
 {
     //ctor
@@ -101,7 +101,6 @@ void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
     case eNOP:
         break;
     }
-
     byte statusCMD = eSTATUS;
     read_reg = read_register(&statusCMD);
     msgBack[0] = read_reg[0];
@@ -110,7 +109,7 @@ void nRF24interface::Spi_Write(byte * msg, byte* msgBack)
 
 uint8_t nRF24interface::read_RX_payload_width()
 {
-    if(REGISTERS.FIFO_STATUS.RX_EMPTY)return 0;
+    if(isFIFO_RX_EMTPY())return 0;
     tMsgFrame * temp = RX_FIFO.front();
 
     return temp->Packet_Control_Field.Payload_length;
@@ -118,23 +117,26 @@ uint8_t nRF24interface::read_RX_payload_width()
 
 tMsgFrame * nRF24interface::read_RX_payload()
 {
-    if(REGISTERS.CONFIG.PRIM_RX == 1)
+    if(isRX_MODE())
     {
         if(RX_FIFO.empty())return NULL;
         //Not empty
-        tMsgFrame * temp = RX_FIFO.front();
+        tMsgFrame * frontToDel = RX_FIFO.front();
+        tMsgFrame * temp = new tMsgFrame;
+        memcpy(temp,frontToDel,sizeof(tMsgFrame) );
         RX_FIFO.pop();
+        delete frontToDel;
         if(RX_FIFO.empty())
         {
-            REGISTERS.FIFO_STATUS.RX_EMPTY = 1;
-            REGISTERS.STATUS.RX_P_NO = 7;//empty
+            setRX_EMPTY();
+            setRX_P_NO(7);//empty
         }
         else
         {//still has frames in FIFO change waiting pipe
             temp = RX_FIFO.front();
-            REGISTERS.STATUS.RX_P_NO = addressToPype(temp->Address);
+            setRX_P_NO( addressToPype(temp->Address) );
         }
-        REGISTERS.FIFO_STATUS.RX_FULL = 0;
+        clearRX_FULL();
         return temp;
     }
     return NULL;
@@ -142,7 +144,7 @@ tMsgFrame * nRF24interface::read_RX_payload()
 
 void nRF24interface::write_TX_payload(byte * bytes_to_write)
 {
-    if(REGISTERS.FIFO_STATUS.TX_FULL)return;
+    if(isFIFO_TX_FULL())return;
     tMsgFrame * newFrame = new tMsgFrame;
     int i = 1;
     while( (bytes_to_write[i]!= 0) && (i < 33) )
@@ -157,21 +159,21 @@ void nRF24interface::write_TX_payload(byte * bytes_to_write)
     //Set PID                            //76543210
     newFrame->Packet_Control_Field.PID = 0b00000011 & PID++;
     //Set Address
-    newFrame->Address = *( (uint64_t*)register_array[eTX_ADDR] );
+    newFrame->Address = getTXaddress();
     TX_FIFO.push(newFrame);
-    REGISTERS.FIFO_STATUS.TX_EMPTY = 0;
+    clearTX_EMPTY();
     if(TX_FIFO.size() == 3)
     {
-        REGISTERS.FIFO_STATUS.TX_FULL = 1;
-        REGISTERS.STATUS.TX_FULL = 1;
+        setTX_FULL();
+        setTX_FULL_IRQ();
     }
     REUSE_TX_PL = false;
 }
 
 void nRF24interface::write_no_ack_payload(byte * bytes_to_write)
 {
-    if(!REGISTERS.FEATURE.EN_DYN_ACK)return;
-    if(REGISTERS.FIFO_STATUS.TX_FULL)return;
+    if(!isDynamicACKEnabled())return;
+    if(isFIFO_TX_FULL())return;
     tMsgFrame * newFrame = new tMsgFrame;
     int i = 1;
     while( (bytes_to_write[i]!= 0) && (i < 33) )
@@ -186,22 +188,22 @@ void nRF24interface::write_no_ack_payload(byte * bytes_to_write)
     //Set PID                            //76543210
     newFrame->Packet_Control_Field.PID = 0b00000011 & PID++;
     //Set Address
-    newFrame->Address = *( (uint64_t*)register_array[eTX_ADDR] );
+    newFrame->Address = getTXaddress();
     TX_FIFO.push(newFrame);
-    REGISTERS.FIFO_STATUS.TX_EMPTY = 0;
+    clearTX_EMPTY();
     if(TX_FIFO.size() == 3)
     {
-        REGISTERS.FIFO_STATUS.TX_FULL = 1;
-        REGISTERS.STATUS.TX_FULL = 1;
+        setTX_FULL();
+        setTX_FULL_IRQ();
     }
 }
 
 void nRF24interface::write_ack_payload(byte * bytes_to_write)
 {
     //check if tx fifo is full
-    if(REGISTERS.FIFO_STATUS.TX_FULL == 1)return;
+    if(isFIFO_TX_FULL() == 1)return;
     //check if Dynamic Payload is enabled
-    if(REGISTERS.FEATURE.EN_DPL == 0) return;
+    if(isDynamicPayloadEnabled() == 0) return;
 
     byte pipe = bytes_to_write[0] & 0b00000111; //3 lsb bist are the pype;
 
@@ -225,17 +227,17 @@ void nRF24interface::write_ack_payload(byte * bytes_to_write)
     newFrame->Address = ACK_address;
 
     TX_FIFO.push(newFrame);
-    REGISTERS.FIFO_STATUS.TX_EMPTY = 0;
+    clearTX_EMPTY();
     if(TX_FIFO.size() == 3)
     {
-        REGISTERS.FIFO_STATUS.TX_FULL = 1;
-        REGISTERS.STATUS.TX_FULL = 1;
+        setTX_FULL();
+        setTX_FULL_IRQ();
     }
 }
 
 void nRF24interface::flush_rx()
 {/*****check if device is in RX mode*/
-    if(REGISTERS.CONFIG.PRIM_RX == 1)
+    if(isRX_MODE() == 1)
     {
         while(RX_FIFO.size())
         {
@@ -243,14 +245,14 @@ void nRF24interface::flush_rx()
             RX_FIFO.pop();
             delete temp;
         }
-        REGISTERS.FIFO_STATUS.RX_EMPTY = 1;
-        REGISTERS.FIFO_STATUS.RX_FULL = 0;
+        setRX_EMPTY();
+        clearRX_FULL();
     }
 }
 
 void nRF24interface::flush_tx()
 {/********chec if device is in TX mode*******************/
-    if(REGISTERS.CONFIG.PRIM_RX == 0)
+    if(isRX_MODE() == 0)
     {
         while(TX_FIFO.size())
         {
@@ -258,9 +260,9 @@ void nRF24interface::flush_tx()
             TX_FIFO.pop();
             delete temp;
         }
-        REGISTERS.FIFO_STATUS.TX_FULL = 0;
-        REGISTERS.FIFO_STATUS.TX_EMPTY = 1;
-        REGISTERS.STATUS.TX_FULL = 0;
+        clearTX_FULL();
+        setTX_EMPTY();
+        clearTX_FULL_IRQ();
         if(lastTransmited != NULL) delete lastTransmited;
         REUSE_TX_PL = false;
     }
@@ -273,60 +275,12 @@ void nRF24interface::reuse_last_transmited_payload(void)
 tMsgFrame * nRF24interface::get_ack_packet_for_pipe(uint8_t pipe)
 {
     //feature not enabled
-    if(!REGISTERS.FEATURE.EN_DYN_ACK) return NULL;
+    if(!isDynamicACKEnabled()) return NULL;
     //No ACK payload saved in TX fifo (tx fifo empty)
-    if(REGISTERS.FIFO_STATUS.TX_EMPTY) return NULL;
-    uint64_t pipe_address = 0;
-    uint8_t last_byte = 0;
-    switch(pipe)
-    {
-    case 0:
-        if(REGISTERS.EN_RXADDR.ERX_P0 && REGISTERS.EN_AA.ENAA_P0)
-        {
-            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P0]);
-        }
-        break;
-    case 1:
-        if(REGISTERS.EN_RXADDR.ERX_P1 && REGISTERS.EN_AA.ENAA_P1)
-        {
-            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
-        }
-        break;
-    case 2:
-        if(REGISTERS.EN_RXADDR.ERX_P2 && REGISTERS.EN_AA.ENAA_P2)
-        {
-            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
-            last_byte = *((uint8_t*)register_array[eRX_ADDR_P2]);
-            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
-        }
-        break;
-    case 3:
-        if(REGISTERS.EN_RXADDR.ERX_P3 && REGISTERS.EN_AA.ENAA_P3)
-        {
-            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
-            last_byte = *((uint8_t*)register_array[eRX_ADDR_P3]);
-            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
-        }
-        break;
-    case 4:
-        if(REGISTERS.EN_RXADDR.ERX_P4 && REGISTERS.EN_AA.ENAA_P4)
-        {
-            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
-            last_byte = *((uint8_t*)register_array[eRX_ADDR_P4]);
-            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
-        }
-        break;
-    case 5:
-        if(REGISTERS.EN_RXADDR.ERX_P5 && REGISTERS.EN_AA.ENAA_P5)
-        {
-            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
-            last_byte = *((uint8_t*)register_array[eRX_ADDR_P5]);
-            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
-        }
-        break;
-    default:
-        return NULL;
-    }
+    if(isFIFO_TX_EMPTY()) return NULL;
+    //
+    uint64_t pipe_address = getAddressFromPipe_ENAA(pipe);
+    if(pipe_address == 0)return NULL;
     //test address loaded, check through TX fifo for a match.
     tMsgFrame * the_ack_payload = NULL;
     for(uint8_t i = 0; i < TX_FIFO.size(); i++)
@@ -347,11 +301,11 @@ tMsgFrame * nRF24interface::get_ack_packet_for_pipe(uint8_t pipe)
 bool nRF24interface::receve_frame(tMsgFrame * theFrame)
 {
     /*********check if buffer is full*******/
-    if(REGISTERS.FIFO_STATUS.RX_FULL == true)return false;
+    if(isFIFO_RX_FULL())return false;
     /************check if chip enable is set**/
-    if(CE == false)return false;
+    if(getCE() == false)return false;
     /*************Check if in RX mode*********/
-    if(REGISTERS.CONFIG.PRIM_RX == 0)return false;
+    if(isRX_MODE() == 0)return false;
     /******Check address********************/
     byte pipe = addressToPype(theFrame->Address);
     if(pipe == -1) return false;
@@ -366,14 +320,14 @@ bool nRF24interface::receve_frame(tMsgFrame * theFrame)
     }
 
     /********push into RX FIFO*******/
-    if(REGISTERS.FIFO_STATUS.RX_EMPTY)
-        REGISTERS.STATUS.RX_P_NO = pipe;
+    if(isFIFO_RX_EMTPY())
+        setRX_P_NO(pipe);
     RX_FIFO.push(newFrame);
 
-    if(RX_FIFO.size() == 3)REGISTERS.FIFO_STATUS.RX_FULL = 1;
+    if(RX_FIFO.size() == 3)setRX_FULL();
 
-    REGISTERS.STATUS.RX_DR = 1;
-    REGISTERS.FIFO_STATUS.RX_EMPTY = 0;
+    setRX_DR_IRQ();//issue irq...
+    clearRX_EMPTY();
     //tranzmit ack
     return true;
 }

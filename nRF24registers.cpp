@@ -167,6 +167,62 @@ byte nRF24registers::addressToPype(uint64_t address)
     return -1;
 }
 
+uint64_t nRF24registers::getAddressFromPipe_ENAA(byte pipe)
+{
+    uint64_t pipe_address = 0;
+    uint8_t last_byte = 0;
+    switch(pipe)
+    {
+    case 0:
+        if(REGISTERS.EN_RXADDR.ERX_P0 && REGISTERS.EN_AA.ENAA_P0)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P0]);
+        }
+        break;
+    case 1:
+        if(REGISTERS.EN_RXADDR.ERX_P1 && REGISTERS.EN_AA.ENAA_P1)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+        }
+        break;
+    case 2:
+        if(REGISTERS.EN_RXADDR.ERX_P2 && REGISTERS.EN_AA.ENAA_P2)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P2]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    case 3:
+        if(REGISTERS.EN_RXADDR.ERX_P3 && REGISTERS.EN_AA.ENAA_P3)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P3]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    case 4:
+        if(REGISTERS.EN_RXADDR.ERX_P4 && REGISTERS.EN_AA.ENAA_P4)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P4]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    case 5:
+        if(REGISTERS.EN_RXADDR.ERX_P5 && REGISTERS.EN_AA.ENAA_P5)
+        {
+            pipe_address = *((uint64_t *)register_array[eRX_ADDR_P1]);
+            last_byte = *((uint8_t*)register_array[eRX_ADDR_P5]);
+            pipe_address = (pipe_address & 0xFFFFFFFFFFFFFF00) | (uint64_t)last_byte;
+        }
+        break;
+    default:
+        return 0;
+    }
+    return pipe_address;
+}
+
 uint64_t nRF24registers::getAddressFromPipe(byte pipe)
 {
     uint64_t temp64;
