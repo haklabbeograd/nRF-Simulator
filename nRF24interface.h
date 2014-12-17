@@ -13,15 +13,15 @@ class nRF24interface : public nRF24registers
         nRF24interface();
         /** Default destructor */
         ~nRF24interface();
-        byte Spi_Write(byte * msg,byte * msgBack);
+        byte Spi_Write(byte * msg, int msgLen, byte * msgBack);
         //move to protected
         bool receve_frame(tMsgFrame * theFrame);
     protected:
         //inteface functions
         tMsgFrame * read_RX_payload();
-        void write_TX_payload(byte * bytes_to_write);
-        void write_ack_payload(byte * bytes_to_write);
-        void write_no_ack_payload(byte * bytes_to_write);
+        void write_TX_payload(byte * bytes_to_write, int len);
+        void write_ack_payload(byte * bytes_to_write, int len);
+        void write_no_ack_payload(byte * bytes_to_write, int len);
         tMsgFrame * get_ack_packet_for_pipe(uint8_t pipe);
         void flush_tx();
         void flush_rx();
@@ -34,6 +34,7 @@ class nRF24interface : public nRF24registers
 
     private:
         //interface registers
+        void newFrame(uint64_t Address, uint8_t PayLength, uint8_t thePID, uint8_t theNP_ACK,uint8_t * Payload);
         std::queue<tMsgFrame*> RX_FIFO;
         std::queue<tMsgFrame*> TX_FIFO;
         uint8_t PID;

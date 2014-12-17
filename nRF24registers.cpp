@@ -1,6 +1,8 @@
 #include "nRF24registers.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+
 using namespace nrf24sim;
 nRF24registers::nRF24registers():CE(false)
 {
@@ -110,7 +112,11 @@ void nRF24registers::write_register(byte * bytes_to_write)
     {
         byte addr = bytes_to_write[0] & 0b00011111;
         //no write to these registers
-        if( (addr == eOBSERVE_TX)||(addr == eRPD)||(addr == eFIFO_STATUS) )return;
+        if( (addr == eOBSERVE_TX)||(addr == eRPD)||(addr == eFIFO_STATUS) )
+            {
+                printf("\nRegister is ObserveTX eRPF or FIFOSTATUS");
+                return;
+            }
 
         byte * where_to_write = (byte*)register_array[addr];
 
@@ -126,14 +132,8 @@ void nRF24registers::write_register(byte * bytes_to_write)
         printf("\nBYTE WRITTEN[0]: %X",where_to_write[0]);
         if( (addr == eRX_ADDR_P0) ||  (addr == eRX_ADDR_P1) || (addr == eTX_ADDR))
         {
-            where_to_write[1] = bytes_to_write[2];
-            where_to_write[2] = bytes_to_write[3];
-            where_to_write[3] = bytes_to_write[4];
-            where_to_write[4] = bytes_to_write[5];
-            printf("\nBYTE TO WRITE[1]: %X",where_to_write[1]);
-            printf("\nBYTE TO WRITE[2]: %X",where_to_write[2]);
-            printf("\nBYTE TO WRITE[3]: %X",where_to_write[3]);
-            printf("\nBYTE TO WRITE[4]: %X",where_to_write[4]);
+            *((uint64_t*)where_to_write) = *((uint64_t*)(bytes_to_write+1));
+            printf("\nWritten: %lx", *((uint64_t*)where_to_write) );
         }
     }
 }
@@ -348,9 +348,9 @@ void nRF24registers::printRegContents()
     printf("RPD.RPD => %d\n",REGISTERS.sRPD.sRPD);
 
     printf("\n---RX_ADDR_P0---\n");
-    printf("%X%X%X%X%X\n",((byte*)register_array[eRX_ADDR_P0])[0],((byte*)register_array[eRX_ADDR_P0])[1],((byte*)register_array[eRX_ADDR_P0])[2],((byte*)register_array[eRX_ADDR_P0])[3],((byte*)register_array[eRX_ADDR_P0])[4] );
+    printf("0x%lX\n",*((uint64_t*)register_array[eRX_ADDR_P0]) );
     printf("\n---RX_ADDR_P1---\n");
-    printf("%X%X%X%X%X\n",((byte*)register_array[eRX_ADDR_P1])[0],((byte*)register_array[eRX_ADDR_P1])[1],((byte*)register_array[eRX_ADDR_P1])[2],((byte*)register_array[eRX_ADDR_P1])[3],((byte*)register_array[eRX_ADDR_P1])[4] );
+    printf("0x%lX\n",*((uint64_t*)register_array[eRX_ADDR_P1]) );
     printf("\n---RX_ADDR_P2---\n");
     printf("%X\n",*((byte*)register_array[eRX_ADDR_P2]) );
     printf("\n---RX_ADDR_P3---\n");
@@ -360,7 +360,7 @@ void nRF24registers::printRegContents()
     printf("\n---RX_ADDR_P5---\n");
     printf("%X\n",*((byte*)register_array[eRX_ADDR_P5]) );
     printf("\n---TX_ADDR---\n");
-    printf("%X%X%X%X%X\n",((byte*)register_array[eTX_ADDR])[0],((byte*)register_array[eTX_ADDR])[1],((byte*)register_array[eTX_ADDR])[2],((byte*)register_array[eTX_ADDR])[3],((byte*)register_array[eTX_ADDR])[4] );
+    printf("0x%lX\n",*((uint64_t*)register_array[eTX_ADDR]) );
 
     printf("\n---RX_PW_P0---\n");
     printf("RX_PW_P0.Reserved => %d\n",REGISTERS.sRX_PW_P0.sReserved);

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "nRF24l01plus.h"
+#include "RF24.h"
 
 /*
 Comentting back storrry
@@ -33,6 +34,7 @@ emit signal()
 x->slot()
 se izvrsava u qthreadu.
 */
+
 void printBin(byte toPrint)
 {
     int i =8;
@@ -46,56 +48,43 @@ void printBin(byte toPrint)
 }
 int main()
 {
-    nRF24l01plus test;
+    nRF24l01plus * test = new nRF24l01plus();
 
-                      //76543210   76543210
-    byte setPRX[6] = {0b00100000,0b00001011,0,0,0,0};
-    byte msgReturn[33];
+    RF24 * radio = new RF24(9,10,test);
+    radio->printDetails();
+    getchar();
 
-    test.Spi_Write(setPRX,msgReturn);
-    test.setCE_HIGH();
+    radio->begin();
+    getchar();
+    radio->printDetails();
+    getchar();
+    radio->setRetries(15,15);
+    getchar();
+    radio->printDetails();
+    getchar();
 
-    tMsgFrame * newFrame = new tMsgFrame;
-    newFrame->Address = 0xe7e7e7e7e7;
-    newFrame->Packet_Control_Field.NP_ACK = 0;
-    newFrame->Packet_Control_Field.Payload_length=5;
-    newFrame->Packet_Control_Field.PID = 1;
-    newFrame->Payload[0] = 1;
-    newFrame->Payload[1] = 2;
-    newFrame->Payload[2] = 4;
-    newFrame->Payload[3] = 8;
-    newFrame->Payload[4] = 16;
+    radio->setPayloadSize(8);
+    getchar();
+    radio->printDetails();
+    getchar();
 
-    test.receve_frame(newFrame);
-    newFrame->Payload[2] = 11;
-    test.receve_frame(newFrame);
-    newFrame->Packet_Control_Field.Payload_length=2;
-    test.receve_frame(newFrame);
+    radio->openWritingPipe(0xF0F0F0F0E1);
+    getchar();
+    radio->printDetails();
+    getchar();
 
+    radio->openReadingPipe(1, 0xF0F0F0F0D2);
+    getchar();
+    radio->printDetails();
+    getchar();
 
-    byte readRxPayloadWid[6] = {0b01100000,0,0,0,0,0};
-    test.Spi_Write(readRxPayloadWid,msgReturn);
+    byte sentCMD[1] = {0x00| ( 0x1F & 0x0A )};
+    uint64_t buf;
+    test->Spi_Write(sentCMD,1,(byte*)(&buf) );
 
-    byte msgLen = msgReturn[1];
-
-    byte readRxPayload[6] = {0b01100001,0,0,0,0,0};
-    test.Spi_Write(readRxPayload,msgReturn);
-
-    test.Spi_Write(readRxPayloadWid,msgReturn);
-    msgLen = msgReturn[1];
-    test.Spi_Write(readRxPayload,msgReturn);
-
-    test.Spi_Write(readRxPayloadWid,msgReturn);
-    msgLen = msgReturn[1];
-    test.Spi_Write(readRxPayload,msgReturn);
-
-    for(int i = 0; i < msgLen; i ++)
-    {
-        printf("\n%d",msgReturn[i+1]);
-    }
-
-    test.printRegContents();
-
+    printf("\n0x%lX\n",buf );
 
     return 0;
 }
+
+

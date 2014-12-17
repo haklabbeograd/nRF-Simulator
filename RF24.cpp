@@ -40,7 +40,7 @@ void RF24::ce(int level)
     }
     else
     {
-        theNRF24l01plus->setCE_HIGH();
+        theNRF24l01plus->setCE_LOW();
     }
 }
 
@@ -49,7 +49,7 @@ void RF24::ce(int level)
 uint8_t RF24::read_register(uint8_t reg, uint8_t* buf, uint8_t len)
 {
   byte sentCMD[1] = {R_REGISTER | ( REGISTER_MASK & reg )};
-  return theNRF24l01plus->Spi_Write(sentCMD,buf);
+  return theNRF24l01plus->Spi_Write(sentCMD,len,buf);
 }
 
 /****************************************************************************/
@@ -58,7 +58,8 @@ uint8_t RF24::read_register(uint8_t reg)
 {
     byte sentCMD[1] = {R_REGISTER | ( REGISTER_MASK & reg )};
     byte msgBack[1];
-    theNRF24l01plus->Spi_Write(sentCMD,msgBack);
+    theNRF24l01plus->Spi_Write(sentCMD,1,msgBack);
+    printf("\nread_register(reg) reg: 0x%X valueBack: 0x%X",reg,msgBack[0]);
     return msgBack[0];
 }
 
@@ -71,16 +72,17 @@ uint8_t RF24::write_register(uint8_t reg, const uint8_t* buf, uint8_t len)
   memcpy(tempBuf+1,buf,len);
   tempBuf[0] = W_REGISTER | ( REGISTER_MASK & reg );
 
-  return theNRF24l01plus->Spi_Write(tempBuf,placeholder);
+  return theNRF24l01plus->Spi_Write(tempBuf,len,placeholder);
 }
 
 /****************************************************************************/
 
 uint8_t RF24::write_register(uint8_t reg, uint8_t value)
 {
-  byte CMDsent[3]{W_REGISTER | ( REGISTER_MASK & reg ),value,0};
+  printf("\nRF24: write_register(reg,value) reg: 0x%X value: 0x%X\n",reg,value);
+  byte CMDsent[3]={W_REGISTER | ( REGISTER_MASK & reg ),value,0};
   byte placeholder[5];
-  return theNRF24l01plus->Spi_Write(CMDsent,placeholder);
+  return theNRF24l01plus->Spi_Write(CMDsent,1,placeholder);
 }
 
 /****************************************************************************/
@@ -92,7 +94,7 @@ uint8_t RF24::write_payload(const void* buf, uint8_t len)
   memcpy(tempBuf+1,buf,len);
   tempBuf[0] = W_TX_PAYLOAD;
 
-  return theNRF24l01plus->Spi_Write(tempBuf,placeholder);
+  return theNRF24l01plus->Spi_Write(tempBuf,len,placeholder);
 }
 
 /****************************************************************************/
@@ -100,7 +102,7 @@ uint8_t RF24::write_payload(const void* buf, uint8_t len)
 uint8_t RF24::read_payload(void* buf, uint8_t len)
 {
   byte CMDsent[2] = {R_RX_PAYLOAD,0};
-  return theNRF24l01plus->Spi_Write(CMDsent,(byte*)buf);
+  return theNRF24l01plus->Spi_Write(CMDsent,1,(byte*)buf);
 }
 
 /****************************************************************************/
@@ -109,7 +111,7 @@ uint8_t RF24::flush_rx(void)
 {
   byte CMDsent[2] = {FLUSH_RX,0};
   byte placeholder[5];
-  return theNRF24l01plus->Spi_Write(CMDsent,placeholder);
+  return theNRF24l01plus->Spi_Write(CMDsent,1,placeholder);
 }
 
 /****************************************************************************/
@@ -118,7 +120,7 @@ uint8_t RF24::flush_tx(void)
 {
   byte CMDsent[2] = {FLUSH_TX,0};
   byte placeholder[5];
-  return theNRF24l01plus->Spi_Write(CMDsent,placeholder);
+  return theNRF24l01plus->Spi_Write(CMDsent,1,placeholder);
 }
 
 /****************************************************************************/
@@ -127,7 +129,7 @@ uint8_t RF24::get_status(void)
 {
   byte CMDsent[2] = {NOP,0};
   byte placeholder[5];
-  return theNRF24l01plus->Spi_Write(CMDsent,placeholder);
+  return theNRF24l01plus->Spi_Write(CMDsent,1,placeholder);
 }
 
 /****************************************************************************/
@@ -159,8 +161,7 @@ void RF24::print_observe_tx(uint8_t value)
 
 void RF24::print_byte_register(const char* name, uint8_t reg, uint8_t qty)
 {
-  char extra_tab = strlen(name) < 8 ? '\t' : 0;
-  printf("\t%c =",name);
+  printf("\t%s =",name);
   while (qty--)
     printf(" 0x%02x",read_register(reg++));
   printf("\r\n");
@@ -170,8 +171,7 @@ void RF24::print_byte_register(const char* name, uint8_t reg, uint8_t qty)
 
 void RF24::print_address_register(const char* name, uint8_t reg, uint8_t qty)
 {
-  char extra_tab = strlen(name) < 8 ? '\t' : 0;
-  printf("\t%c =",name);
+  printf("\t%s =",name);
 
   while (qty--)
   {
@@ -189,10 +189,10 @@ void RF24::print_address_register(const char* name, uint8_t reg, uint8_t qty)
 
 /****************************************************************************/
 
-RF24::RF24(uint8_t _cepin, uint8_t _cspin):
+RF24::RF24(uint8_t _cepin, uint8_t _cspin,nRF24l01plus * theNRFsim):
   ce_pin(_cepin), csn_pin(_cspin), wide_band(true), p_variant(false),
   payload_size(32), ack_payload_available(false), dynamic_payloads_enabled(false),
-  pipe0_reading_address(0)
+  pipe0_reading_address(0),theNRF24l01plus(theNRFsim)
 {
 }
 
@@ -468,7 +468,7 @@ uint8_t RF24::getDynamicPayloadSize(void)
 {
   byte sentCMD[2] = {R_RX_PL_WID,0};
   byte msgBack[1];
-  theNRF24l01plus->Spi_Write(sentCMD,msgBack);
+  theNRF24l01plus->Spi_Write(sentCMD,1,msgBack);
   return msgBack[0];
 }
 
@@ -598,7 +598,7 @@ void RF24::toggle_features(void)
 {
   byte sentCMD[3] = {ACTIVATE,0x73,0};
   byte msgBack[1];
-  theNRF24l01plus->Spi_Write(sentCMD,msgBack);
+  theNRF24l01plus->Spi_Write(sentCMD,1,msgBack);
 }
 
 /****************************************************************************/
@@ -659,7 +659,7 @@ void RF24::writeAckPayload(uint8_t pipe, const void* buf, uint8_t len)
   memcpy(tempBuf+1,buf,len);
   tempBuf[0] = W_ACK_PAYLOAD | ( pipe & 0b111 );
 
-  theNRF24l01plus->Spi_Write(tempBuf,placeholder);
+  theNRF24l01plus->Spi_Write(tempBuf,len,placeholder);
 }
 
 /****************************************************************************/

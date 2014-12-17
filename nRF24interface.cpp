@@ -50,7 +50,7 @@ commands nRF24interface::get_command(byte command)
     }
 }
 
-byte nRF24interface::Spi_Write(byte * msg, byte* msgBack)
+byte nRF24interface::Spi_Write(byte * msg,int msgLen, byte* msgBack)
 {
     //identify the command from the first byte
     byte * read_reg;
@@ -62,42 +62,53 @@ byte nRF24interface::Spi_Write(byte * msg, byte* msgBack)
     switch(theCommand)
     {
     case eR_REGISTER:
+        printf("\n\nCOMMAND SENT: R_REGISTER");
         read_reg = read_register(msg); //load the register into temp read_reg
         if(read_reg == NULL)break;
         msgBack[0]=read_reg[0];
-        printf("\nREAD BYTE[0]: %X",msgBack[1]);
+        printf("\nREAD: 0x%X",msgBack[0]);
         if( (addr == eRX_ADDR_P0) || (addr == eRX_ADDR_P1) || addr == eTX_ADDR)
         {
-            msgBack[1]=read_reg[1];
-            msgBack[2]=read_reg[2];
-            msgBack[3]=read_reg[3];
-            msgBack[4]=read_reg[4];
-            printf("\nREAD BYTE[1]: %X",msgBack[1]);
-            printf("\nREAD BYTE[2]: %X",msgBack[2]);
-            printf("\nREAD BYTE[3]: %X",msgBack[3]);
-            printf("\nREAD BYTE[4]: %X",msgBack[4]);
+            *((uint64_t*)(msgBack)) = *((uint64_t*)read_reg);
+            printf("\n0x%lX\n",*((uint64_t*)msgBack));
         }
         break;
     case eW_REGISTER:
+        printf("\n\nCOMMAND SENT: W_REGISTER");
         write_register(msg);
         break;
-    case eR_RX_PL_WID:
-
-        msgBack[0] = read_RX_payload_width();
-        break;
     case eR_RX_PAYLOAD:
+        printf("\n\nCOMMAND SENT: R_RX_PAYLOAD");
         tempMsgFrame = read_RX_payload();
         if(tempMsgFrame != NULL)
         {
-            for (int i = 0;i<tempMsgFrame->Packet_Control_Field.Payload_length;i++)
-            {
-                msgBack[i] = tempMsgFrame->Payload[i];
-            }
+            memcpy(msgBack,tempMsgFrame->Payload,tempMsgFrame->Packet_Control_Field.Payload_length);
             delete tempMsgFrame;
         }
         break;
+    case eW_TX_PAYLOAD:
+        printf("\n\nW_TX_PAYLOAD");
+        write_TX_payload(msg+1,msgLen);
+        break;
+    case eFLUSH_TX:
+        printf("\n\nCOMMAND SENT: FLUSH_RX");
+        flush_tx();
+        break;
     case eFLUSH_RX:
+        printf("\n\nCOMMAND SENT: FLUSH_RX");
         flush_rx();
+        break;
+    case eR_RX_PL_WID:
+        printf("\n\nCOMMAND SENT: R_RX_PL_WID");
+        msgBack[0] = read_RX_payload_width();
+        break;
+    case eW_ACK_PAYLOAD:
+        printf("\n\nCOMMAND SENT: W_ACK_PAYLOAD");
+        write_ack_payload(msg+1,msgLen);
+        break;
+    case eW_TX_PAYLOAD_NO_ACK:
+        printf("\n\nCOMMAND SENT: W_TX_PAYLOAD_NO_ACK");
+        write_no_ack_payload(msg+1,msgLen);
         break;
     default:
     case eNOP:
@@ -143,64 +154,47 @@ tMsgFrame * nRF24interface::read_RX_payload()
     }
     return NULL;
 }
-
-void nRF24interface::write_TX_payload(byte * bytes_to_write)
+void nRF24interface::newFrame(uint64_t Address, uint8_t PayLength, uint8_t PID, uint8_t NP_ACK,uint8_t * Payload)
 {
-    if(isFIFO_TX_FULL())return;
-    tMsgFrame * newFrame = new tMsgFrame;
-    int i = 1;
-    while( (bytes_to_write[i]!= 0) && (i < 33) )
+    tMsgFrame * theFrame = new tMsgFrame;
+    int i = 0;
+    while( (i < (PayLength)) && (i < 32) )
     {//writes all the bytes into the payload
-        newFrame->Payload[i-1] = bytes_to_write[i];
+        theFrame->Payload[i] = Payload[i];
         i++;
     }
     //Set PCF payload length
-    newFrame->Packet_Control_Field.Payload_length = i;
+    theFrame->Packet_Control_Field.Payload_length = i;
     //Set NO_ACK flag to zero (request ACK);
-    newFrame->Packet_Control_Field.NP_ACK=0;
+    theFrame->Packet_Control_Field.NP_ACK = NP_ACK;
     //Set PID                            //76543210
-    newFrame->Packet_Control_Field.PID = 0b00000011 & PID++;
+    theFrame->Packet_Control_Field.PID = PID;
     //Set Address
-    newFrame->Address = getTXaddress();
-    TX_FIFO.push(newFrame);
+    theFrame->Address = Address;
+    TX_FIFO.push(theFrame);
     clearTX_EMPTY();
     if(TX_FIFO.size() == 3)
     {
         setTX_FULL();
         setTX_FULL_IRQ();
     }
+}
+
+void nRF24interface::write_TX_payload(byte * bytes_to_write, int len)
+{
+    if(isFIFO_TX_FULL())return;
+    newFrame(getTXaddress(),len, 0b00000011 & PID++,0,bytes_to_write);
     sREUSE_TX_PL = false;
 }
 
-void nRF24interface::write_no_ack_payload(byte * bytes_to_write)
+void nRF24interface::write_no_ack_payload(byte * bytes_to_write, int len)
 {
     if(!isDynamicACKEnabled())return;
     if(isFIFO_TX_FULL())return;
-    tMsgFrame * newFrame = new tMsgFrame;
-    int i = 1;
-    while( (bytes_to_write[i]!= 0) && (i < 33) )
-    {//writes all the bytes into the payload
-        newFrame->Payload[i-1] = bytes_to_write[i];
-        i++;
-    }
-    //Set PCF payload length
-    newFrame->Packet_Control_Field.Payload_length = i;
-    //Set NO_ACK flag to zero (request ACK);
-    newFrame->Packet_Control_Field.NP_ACK=1;
-    //Set PID                            //76543210
-    newFrame->Packet_Control_Field.PID = 0b00000011 & PID++;
-    //Set Address
-    newFrame->Address = getTXaddress();
-    TX_FIFO.push(newFrame);
-    clearTX_EMPTY();
-    if(TX_FIFO.size() == 3)
-    {
-        setTX_FULL();
-        setTX_FULL_IRQ();
-    }
+    newFrame(getTXaddress(),len, 0b00000011 & PID++,1,bytes_to_write);
 }
 
-void nRF24interface::write_ack_payload(byte * bytes_to_write)
+void nRF24interface::write_ack_payload(byte * bytes_to_write, int len)
 {
     //check if tx fifo is full
     if(isFIFO_TX_FULL() == 1)return;
@@ -212,29 +206,7 @@ void nRF24interface::write_ack_payload(byte * bytes_to_write)
     uint64_t ACK_address = getAddressFromPipe(pipe);
     if(ACK_address == 0 )return;
 
-    tMsgFrame * newFrame = new tMsgFrame;
-
-    int i = 1;
-    while( (bytes_to_write[i]!= 0) && (i < 32) )
-    {//writes all the bytes into the payload
-        newFrame->Payload[i-1] = bytes_to_write[i];
-        i++;
-    }
-    //Set PCF payload length
-    newFrame->Packet_Control_Field.Payload_length = i;
-    //Set NO_ACK flag to one ( does not request ACK);
-    newFrame->Packet_Control_Field.NP_ACK=1;
-    newFrame->Packet_Control_Field.PID = 0;
-    //Set Address
-    newFrame->Address = ACK_address;
-
-    TX_FIFO.push(newFrame);
-    clearTX_EMPTY();
-    if(TX_FIFO.size() == 3)
-    {
-        setTX_FULL();
-        setTX_FULL_IRQ();
-    }
+    newFrame(ACK_address,len,0,1,bytes_to_write);
 }
 
 void nRF24interface::flush_rx()
