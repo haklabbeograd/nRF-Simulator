@@ -3,7 +3,7 @@
 #include <string.h>
 
 
-nRF24interface::nRF24interface():nRF24registers(),PID(0),sREUSE_TX_PL(false),lastTransmited(NULL)
+nRF24interface::nRF24interface(QObject *parent):nRF24registers(parent),sREUSE_TX_PL(false),lastTransmited(NULL),PID(0)
 {
     //ctor
 }
@@ -128,6 +128,59 @@ uint8_t nRF24interface::read_RX_payload_width()
     return temp->Packet_Control_Field.Payload_length;
 }
 
+tMsgFrame *nRF24interface::getTXpacket()
+{
+    if(sREUSE_TX_PL == true)
+    {//resend last packet
+        sREUSE_TX_PL = false;
+        return lastTransmited;
+    }
+    if(TX_FIFO.empty() == true)return NULL; //nothing to send
+    tMsgFrame * frameToReturn = NULL;
+    tMsgFrame * temp;
+    int i = 0;
+    int sizeOfTXfifo = TX_FIFO.size();
+    while(i++ < sizeOfTXfifo)
+    {
+        if( (tMsgFrame*)(TX_FIFO.front())->Address == 0 )
+        {
+            frameToReturn = new tMsgFrame;
+            memcpy(frameToReturn,TX_FIFO.front(),sizeof(tMsgFrame));
+            temp = TX_FIFO.front();
+            TX_FIFO.pop();
+            delete temp;
+            if(i == 1)
+            {//rarannge back TX_FIFO
+                temp = TX_FIFO.front();
+                TX_FIFO.pop();
+                TX_FIFO.push(temp);
+            }
+            //if tx fifo was full size = 3
+            //remove full flag
+            if(sizeOfTXfifo == 3)
+            {
+                clearTX_FULL_IRQ();
+                clearTX_FULL();
+            }
+            //if tx fifo only had one size = 1
+            //set the tx fifo empty flag
+            if(sizeOfTXfifo == 1)
+            {
+                setTX_EMPTY();
+            }
+            return frameToReturn;
+        }
+        temp = TX_FIFO.front();
+        TX_FIFO.pop();
+        TX_FIFO.push(temp);
+    }
+    //rarange back TX FIFO
+    temp = TX_FIFO.front();
+    TX_FIFO.pop();
+    TX_FIFO.push(temp);
+    return NULL;
+}
+
 tMsgFrame * nRF24interface::read_RX_payload()
 {
     if(isRX_MODE())
@@ -183,7 +236,7 @@ void nRF24interface::newFrame(uint64_t Address, uint8_t PayLength, uint8_t PID, 
 void nRF24interface::write_TX_payload(byte * bytes_to_write, int len)
 {
     if(isFIFO_TX_FULL())return;
-    newFrame(getTXaddress(),len, 0b00000011 & PID++,0,bytes_to_write);
+    newFrame(0,len, 0b00000011 & PID++,0,bytes_to_write);
     sREUSE_TX_PL = false;
 }
 
@@ -191,7 +244,7 @@ void nRF24interface::write_no_ack_payload(byte * bytes_to_write, int len)
 {
     if(!isDynamicACKEnabled())return;
     if(isFIFO_TX_FULL())return;
-    newFrame(getTXaddress(),len, 0b00000011 & PID++,1,bytes_to_write);
+    newFrame(0,len, 0b00000011 & PID++,1,bytes_to_write);
 }
 
 void nRF24interface::write_ack_payload(byte * bytes_to_write, int len)
@@ -282,7 +335,7 @@ bool nRF24interface::receve_frame(tMsgFrame * theFrame)
     if(isRX_MODE() == 0)return false;
     /******Check address********************/
     byte pipe = addressToPype(theFrame->Address);
-    if(pipe == -1) return false;
+    if(pipe == 0xFF) return false;
 
     /***Receve the frame***/
     tMsgFrame * newFrame = new tMsgFrame;

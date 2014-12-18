@@ -4,7 +4,7 @@
 #include <string.h>
 
 using namespace nrf24sim;
-nRF24registers::nRF24registers():CE(false)
+nRF24registers::nRF24registers(QObject *parent):QThread(parent),CE(false)
 {
     register_array[eCONFIG]      = &REGISTERS.sCONFIG;
     *((byte*)register_array[eCONFIG]) = 0b00001000;
@@ -99,6 +99,12 @@ nRF24registers::~nRF24registers()
     }
 }
 
+void nRF24registers::setCE_HIGH()
+{
+    CE = true;
+    emit CEsetHIGH();
+}
+
 byte * nRF24registers::read_register(byte* read_command)
 {
     byte addr = *read_command & 0b00011111;
@@ -108,6 +114,7 @@ byte * nRF24registers::read_register(byte* read_command)
 void nRF24registers::write_register(byte * bytes_to_write)
 {
     byte temp;
+    bool emitTXmodeSignal = false;
     if(CE == false)
     {
         byte addr = bytes_to_write[0] & 0b00011111;
@@ -119,6 +126,14 @@ void nRF24registers::write_register(byte * bytes_to_write)
             }
 
         byte * where_to_write = (byte*)register_array[addr];
+        if(addr == eRF_CH) clearPLOS_CNT();
+        if(addr == eCONFIG)
+        {
+            if( ((*where_to_write & 0b1) == 1) && ((*bytes_to_write & 0b1) == 0))
+            {//was in RX mode => switch to TX mode
+                emitTXmodeSignal = true;
+            }
+        }
 
         if(addr!=eSTATUS)
             where_to_write[0] = bytes_to_write[1];
@@ -135,6 +150,10 @@ void nRF24registers::write_register(byte * bytes_to_write)
             *((uint64_t*)where_to_write) = *((uint64_t*)(bytes_to_write+1));
             printf("\nWritten: %lx", *((uint64_t*)where_to_write) );
         }
+    }
+    if(emitTXmodeSignal == true)
+    {
+        emit TXmodeSet();
     }
 }
 
@@ -164,7 +183,7 @@ byte nRF24registers::addressToPype(uint64_t address)
         if(address == *( (uint64_t *)register_array[eRX_ADDR_P5]) )
             return 5;
 
-    return -1;
+    return 0xFF;
 }
 
 uint64_t nRF24registers::getAddressFromPipe_ENAA(byte pipe)
@@ -221,6 +240,18 @@ uint64_t nRF24registers::getAddressFromPipe_ENAA(byte pipe)
         return 0;
     }
     return pipe_address;
+}
+
+void nRF24registers::PLOS_CNT_INC()
+{
+    if(REGISTERS.sOBSERVE_TX.sPLOS_CNT < 15)
+        REGISTERS.sOBSERVE_TX.sPLOS_CNT++;
+}
+
+void nRF24registers::ARC_CNT_INC()
+{
+    if(REGISTERS.sOBSERVE_TX.sARC_CNT < 15)
+        REGISTERS.sOBSERVE_TX.sARC_CNT++;
 }
 
 uint64_t nRF24registers::getAddressFromPipe(byte pipe)

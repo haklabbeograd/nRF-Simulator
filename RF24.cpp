@@ -48,7 +48,7 @@ void RF24::ce(int level)
 
 uint8_t RF24::read_register(uint8_t reg, uint8_t* buf, uint8_t len)
 {
-  byte sentCMD[1] = {R_REGISTER | ( REGISTER_MASK & reg )};
+  byte sentCMD[1] = {(byte)(R_REGISTER | ( REGISTER_MASK & reg ))};
   return theNRF24l01plus->Spi_Write(sentCMD,len,buf);
 }
 
@@ -56,7 +56,7 @@ uint8_t RF24::read_register(uint8_t reg, uint8_t* buf, uint8_t len)
 
 uint8_t RF24::read_register(uint8_t reg)
 {
-    byte sentCMD[1] = {R_REGISTER | ( REGISTER_MASK & reg )};
+    byte sentCMD[1] = {(byte)(R_REGISTER | ( REGISTER_MASK & reg ))};
     byte msgBack[1];
     theNRF24l01plus->Spi_Write(sentCMD,1,msgBack);
     printf("\nread_register(reg) reg: 0x%X valueBack: 0x%X",reg,msgBack[0]);
@@ -80,7 +80,7 @@ uint8_t RF24::write_register(uint8_t reg, const uint8_t* buf, uint8_t len)
 uint8_t RF24::write_register(uint8_t reg, uint8_t value)
 {
   printf("\nRF24: write_register(reg,value) reg: 0x%X value: 0x%X\n",reg,value);
-  byte CMDsent[3]={W_REGISTER | ( REGISTER_MASK & reg ),value,0};
+  byte CMDsent[3]={(byte)(W_REGISTER | ( REGISTER_MASK & reg )),value,0};
   byte placeholder[5];
   return theNRF24l01plus->Spi_Write(CMDsent,1,placeholder);
 }

@@ -3,18 +3,21 @@
 
 #include <stdint.h>
 #include "nRF24bits_struct.h"
+#include <QObject>
+#include <QThread>
 using namespace nrf24sim;
 
-class nRF24registers
+class nRF24registers:public QThread
 {
+    Q_OBJECT
     public:
         /** Default constructor */
-        nRF24registers();
+        nRF24registers(QObject * parent = 0);
         /** Default destructor */
         ~nRF24registers();
         void printRegContents();
         bool checkIRQ();
-        void setCE_HIGH(){CE = true;}
+        void setCE_HIGH();
         void setCE_LOW(){CE = false;}
         bool getCE(){return CE;}
     protected:
@@ -23,6 +26,8 @@ class nRF24registers
         byte addressToPype(uint64_t address);
         uint64_t getAddressFromPipe(byte pipe);
         uint64_t getAddressFromPipe_ENAA(byte pipe);
+        uint8_t getARD(){return REGISTERS.sSETUP_RETR.sARD;}
+        uint8_t getARC(){return REGISTERS.sSETUP_RETR.sARC;}
         uint64_t getTXaddress(){return *( (uint64_t*)register_array[eTX_ADDR] );}
         bool isDynamicACKEnabled(){return REGISTERS.sFEATURE.sEN_DYN_ACK;}
         bool isDynamicPayloadEnabled(){return REGISTERS.sFEATURE.sEN_DPL;}
@@ -43,11 +48,20 @@ class nRF24registers
         void clearTX_EMPTY(){REGISTERS.sFIFO_STATUS.sTX_EMPTY = 0;}
         void setRX_DR_IRQ(){REGISTERS.sSTATUS.sRX_DR = 1;}
         void clearRX_DR_IRQ(){REGISTERS.sSTATUS.sRX_DR = 0;}
-        void setRX_P_NO(byte pipe){REGISTERS.sSTATUS.sRX_P_NO = pipe;}
+        void setMAX_RT_IRQ(){REGISTERS.sSTATUS.sMAX_RT =1;}
+        void PLOS_CNT_INC();
+        void clearPLOS_CNT(){REGISTERS.sOBSERVE_TX.sPLOS_CNT = 0;}
+        void ARC_CNT_INC();
+        void clearARC_CNT(){REGISTERS.sOBSERVE_TX.sARC_CNT = 0;}
+        uint8_t getARC_CNT(){return REGISTERS.sOBSERVE_TX.sARC_CNT;}
+        void setRX_P_NO(byte pipe){REGISTERS.sSTATUS.sRX_P_NO = pipe;}        
     private:
         tREGISTERS REGISTERS;
         void * register_array[0x1E];
         bool CE;
+    signals:
+        void CEsetHIGH(void);
+        void TXmodeSet(void);
 };
 
 #endif // NRF24REGISTERS_H

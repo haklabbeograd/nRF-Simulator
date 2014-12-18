@@ -51,38 +51,29 @@ int main()
     nRF24l01plus * test = new nRF24l01plus();
 
     RF24 * radio = new RF24(9,10,test);
-    radio->printDetails();
-    getchar();
-
     radio->begin();
-    getchar();
-    radio->printDetails();
-    getchar();
+
     radio->setRetries(15,15);
-    getchar();
-    radio->printDetails();
-    getchar();
+
 
     radio->setPayloadSize(8);
-    getchar();
-    radio->printDetails();
-    getchar();
 
     radio->openWritingPipe(0xF0F0F0F0E1);
-    getchar();
-    radio->printDetails();
-    getchar();
+
 
     radio->openReadingPipe(1, 0xF0F0F0F0D2);
+
+    system("cls");
+    getchar();
+    radio->startListening();
     getchar();
     radio->printDetails();
     getchar();
-
-    byte sentCMD[1] = {0x00| ( 0x1F & 0x0A )};
-    uint64_t buf;
-    test->Spi_Write(sentCMD,1,(byte*)(&buf) );
-
-    printf("\n0x%lX\n",buf );
+    radio->stopListening();
+    getchar();
+    radio->printDetails();
+    getchar();
+    radio->available();
 
     return 0;
 }
