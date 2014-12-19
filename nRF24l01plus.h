@@ -27,11 +27,12 @@ class nRF24l01plus : public nRF24interface
         bool waitingForACK;
         bool coalision;
         Ether * theEther;
+        void ackReceved(tMsgFrame * theMSG, byte pipe);
     private slots:
         void CEsetHIGH();
         void TXmodeSet();
         void TXpacketAdded();
-        void ackReceved();
+        void PWRUPset(void);
         void noACKalarm();
         void reciveMsgFromET(tMsgFrame * theMSG);
         void setCoalision();

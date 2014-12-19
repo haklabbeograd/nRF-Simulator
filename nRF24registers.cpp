@@ -114,6 +114,7 @@ void nRF24registers::write_register(byte * bytes_to_write)
 {
     byte temp;
     bool emitTXmodeSignal = false;
+    bool emitPWRUPsig = false;
     if(CE == false)
     {
         byte addr = bytes_to_write[0] & 0b00011111;
@@ -131,6 +132,10 @@ void nRF24registers::write_register(byte * bytes_to_write)
             if( ((*where_to_write & 0b1) == 1) && ((*bytes_to_write & 0b1) == 0))
             {//was in RX mode => switch to TX mode
                 emitTXmodeSignal = true;
+            }
+            if( ((*where_to_write &0b10)== 0) && ((*bytes_to_write & 0b10)== 1))
+            {
+                emitPWRUPsig = true;
             }
         }
 
@@ -153,6 +158,10 @@ void nRF24registers::write_register(byte * bytes_to_write)
     if(emitTXmodeSignal == true)
     {
         emit TXmodeSet();
+    }
+    if(emitPWRUPsig == true)
+    {
+        emit PWRUPset();
     }
 }
 

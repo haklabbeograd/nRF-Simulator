@@ -16,7 +16,7 @@ class nRF24interface : public nRF24registers
         ~nRF24interface();
         byte Spi_Write(byte * msg, int msgLen, byte * msgBack);
         //move to protected
-        bool receve_frame(tMsgFrame * theFrame);
+        bool receve_frame(tMsgFrame * theFrame, byte pipe);
     protected:
         //inteface functions
         tMsgFrame * read_RX_payload();
@@ -33,6 +33,7 @@ class nRF24interface : public nRF24registers
 
         byte * nop();
         commands get_command(byte command);
+        tMsgFrame * getACKmsgForPipe(byte pipe);
         bool sREUSE_TX_PL;
         tMsgFrame * lastTransmited;
     private:

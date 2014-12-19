@@ -325,30 +325,19 @@ tMsgFrame * nRF24interface::get_ack_packet_for_pipe(uint8_t pipe)
     return the_ack_payload;
 }
 
-bool nRF24interface::receve_frame(tMsgFrame * theFrame)
+bool nRF24interface::receve_frame(tMsgFrame * theFrame, byte pipe)
 {
     /*********check if buffer is full*******/
     if(isFIFO_RX_FULL())return false;
-    /************check if chip enable is set**/
-    if(getCE() == false)return false;
-    /*************Check if in RX mode*********/
-    if(isRX_MODE() == 0)return false;
-    /******Check address********************/
-    byte pipe = addressToPype(theFrame->Address);
-    if(pipe == 0xFF) return false;
 
     /***Receve the frame***/
     tMsgFrame * newFrame = new tMsgFrame;
-    newFrame->Address = theFrame->Address;
-    newFrame->Packet_Control_Field = theFrame->Packet_Control_Field;
-    for(int i = 0; i < theFrame->Packet_Control_Field.Payload_length; i++)
-    {
-        newFrame->Payload[i] = theFrame->Payload[i];
-    }
-
+    memcpy(newFrame,theFrame,sizeof(tMsgFrame));
     /********push into RX FIFO*******/
     if(isFIFO_RX_EMTPY())
+    {
         setRX_P_NO(pipe);
+    }
     RX_FIFO.push(newFrame);
 
     if(RX_FIFO.size() == 3)setRX_FULL();

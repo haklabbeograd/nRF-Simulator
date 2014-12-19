@@ -11,6 +11,7 @@ nRF24l01plus::nRF24l01plus(QObject *parent,Ether * someEthar):nRF24interface(par
     theTimer = new QTimer(this);
     connect(this,SIGNAL(CEsetHIGH()),this,SLOT(CEsetHIGH()));
     connect(this,SIGNAL(TXmodeSet()),this,SLOT(TXmodeSet()));
+    connect(this,SIGNAL(PWRUPset()),this,SLOT(PWRUPset()));
     connect(this,SIGNAL(TXpacketAdded()),this,SLOT(TXpacketAdded()));
     connect(this->theTimer,SIGNAL(timeout()),this,SLOT(noACKalarm()));
 
@@ -30,7 +31,7 @@ nRF24l01plus::~nRF24l01plus()
  */
 void nRF24l01plus::startPTX()
 {   //
-    if(getCE() == false)return;
+    if(getCE() == false || isPWRUP() == false)return;
     if(isRX_MODE())return;
     tMsgFrame * packetToSend = getTXpacket();
     if(packetToSend == NULL)return;
@@ -56,6 +57,7 @@ void nRF24l01plus::startPTX()
             lastTransmited = NULL;
         }
         lastTransmited = packetToSend;
+        setTX_DS_IRQ();
     }
 }
 
@@ -66,7 +68,7 @@ void nRF24l01plus::startPTX()
 void nRF24l01plus::CEsetHIGH()
 {
     //if nRF is in RX mode nothing shoud happen;
-    if(isRX_MODE())return;
+    if(isRX_MODE() == true || isPWRUP() == false)return;
     startPTX();
 }
 
@@ -76,28 +78,50 @@ void nRF24l01plus::CEsetHIGH()
  */
 void nRF24l01plus::TXmodeSet()
 {
-    if(getCE() == false) return;
+    if(getCE() == false || isPWRUP() == false) return;
     startPTX();
 
 }
 
 void nRF24l01plus::TXpacketAdded()
 {
-    if(getCE() == false) return;
-    if(isRX_MODE())return;
+    if(getCE() == false || isRX_MODE() == true || isPWRUP() == false) return;
     startPTX();
 }
 
-void nRF24l01plus::ackReceved()
+void nRF24l01plus::PWRUPset()
 {
-    theTimer->stop();
-    waitingForACK = false;
-    if(lastTransmited != NULL)
-    {
-        delete lastTransmited;
-        lastTransmited = NULL;
+    if(getCE() == false || isRX_MODE() == true)return;
+    startPTX();
+}
+
+void nRF24l01plus::ackReceved(tMsgFrame *theMSG,byte pipe)
+{
+    if(isDynamicACKEnabled())
+    {//coud be ACK with payload
+        receve_frame(theMSG,pipe);
+        waitingForACK = false;
     }
-    lastTransmited = TXpacket;
+    else
+    {//could be regular ack
+        if(theMSG->Packet_Control_Field.Payload_length == 0)
+        {//regular ACK receved :D
+            waitingForACK = false;
+        }
+    }
+
+    if(waitingForACK == false)
+    {
+        theTimer->stop();
+
+        if(lastTransmited != NULL)
+        {
+            delete lastTransmited;
+            lastTransmited = NULL;
+        }
+        lastTransmited = TXpacket;
+        setTX_DS_IRQ();
+    }
 }
 
 void nRF24l01plus::noACKalarm()
@@ -125,8 +149,27 @@ void nRF24l01plus::noACKalarm()
 void nRF24l01plus::reciveMsgFromET(tMsgFrame *theMSG)
 {
     if(!coalision)
-    {//do the shit
-
+    {//coalision did not happen
+        if(isPWRUP() && getCE())
+        {//in Standby mode (PWRUP = 1 && CE = 1)
+            byte pipe = addressToPype(theMSG->Address);
+            if(isRX_MODE())
+            {//receving
+             //check if address is one off th
+                if(pipe != 0xFF)
+                {//pipe is open ready to receve
+                    //fill RX buffer
+                    receve_frame(theMSG,pipe);
+                }
+            }
+            else if(waitingForACK)
+            {//waiting for ack
+                if(pipe == addressToPype(getTXaddress()))
+                {//addess is the P0 address, this is ACK packet
+                    ackReceved(theMSG,pipe);
+                }
+            }
+        }
     }
     coalision = false;
 }

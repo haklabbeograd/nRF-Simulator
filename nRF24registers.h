@@ -35,6 +35,7 @@ class nRF24registers:public QThread
         bool isFIFO_RX_EMTPY(){return REGISTERS.sFIFO_STATUS.sRX_EMPTY;}
         bool isFIFO_RX_FULL(){return REGISTERS.sFIFO_STATUS.sRX_FULL;}
         bool isRX_MODE(){return REGISTERS.sCONFIG.sPRIM_RX;}
+        bool isPWRUP(){return REGISTERS.sCONFIG.sPWR_UP;}
         void clearRX_FULL(){REGISTERS.sFIFO_STATUS.sRX_FULL = 0;}
         void setRX_FULL(){REGISTERS.sFIFO_STATUS.sRX_FULL = 1;}
         void clearRX_EMPTY(){REGISTERS.sFIFO_STATUS.sRX_EMPTY = 0;}
@@ -48,6 +49,7 @@ class nRF24registers:public QThread
         void setRX_DR_IRQ(){REGISTERS.sSTATUS.sRX_DR = 1;}
         void clearRX_DR_IRQ(){REGISTERS.sSTATUS.sRX_DR = 0;}
         void setMAX_RT_IRQ(){REGISTERS.sSTATUS.sMAX_RT =1;}
+        void setTX_DS_IRQ(){REGISTERS.sSTATUS.sTX_DS = 1;}
         void PLOS_CNT_INC();
         void clearPLOS_CNT(){REGISTERS.sOBSERVE_TX.sPLOS_CNT = 0;}
         void ARC_CNT_INC();
@@ -61,6 +63,7 @@ class nRF24registers:public QThread
     signals:
         void CEsetHIGH(void);
         void TXmodeSet(void);
+        void PWRUPset(void);
 };
 
 #endif // NRF24REGISTERS_H
