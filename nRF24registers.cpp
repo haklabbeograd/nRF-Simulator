@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-using namespace nrf24sim;
 nRF24registers::nRF24registers(QObject *parent):QThread(parent),CE(false)
 {
     register_array[eCONFIG]      = &REGISTERS.sCONFIG;

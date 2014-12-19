@@ -5,7 +5,6 @@
 #include "nRF24bits_struct.h"
 #include <QObject>
 #include <QThread>
-using namespace nrf24sim;
 
 class nRF24registers:public QThread
 {

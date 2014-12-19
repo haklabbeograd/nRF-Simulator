@@ -3,11 +3,12 @@
 
 #include <stdlib.h>
 #include "nRF24registers.h"
-#include "nRF24bits_struct.h"
 #include <queue>
+#include "msgframe.h"
 
 class nRF24interface : public nRF24registers
 {
+    Q_OBJECT
     public:
         /** Default constructor */
         nRF24interface(QObject * parent = 0);

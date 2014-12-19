@@ -19,7 +19,8 @@ SOURCES += main.cpp \
     nRF24interface.cpp \
     nRF24l01plus.cpp \
     nRF24registers.cpp \
-    RF24.cpp
+    RF24.cpp \
+    ether.cpp
 
 HEADERS += \
     nRF24bits_struct.h \
@@ -28,4 +29,6 @@ HEADERS += \
     nRF24l01plus.h \
     nRF24registers.h \
     RF24.h \
-    RF24_config.h
+    RF24_config.h \
+    ether.h \
+    msgframe.h

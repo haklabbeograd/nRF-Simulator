@@ -8,8 +8,7 @@
 
 typedef uint16_t word;
 typedef uint8_t byte;
-namespace nrf24sim
-{
+
 typedef enum {eNOP=0,eR_REGISTER, eW_REGISTER,eR_RX_PAYLOAD,eW_TX_PAYLOAD,eFLUSH_TX,eFLUSH_RX,eREUSE_TX_PL,eR_RX_PL_WID,eW_ACK_PAYLOAD,eW_TX_PAYLOAD_NO_ACK}commands;
 typedef enum {
     eCONFIG      =0x00,  eEN_AA       =0x01,  eEN_RXADDR   =0x02,
@@ -167,18 +166,4 @@ typedef struct sREGISTERS
     tFEATURE        sFEATURE;
 }tREGISTERS;
 
-typedef struct sPACKET_CONTROL_FIELD
-{
-    uint8_t Payload_length:6;
-    uint8_t PID:2;
-    uint8_t NP_ACK:1;
-}tPACKET_CONTROL_FIELD;
-
-typedef struct sFRAME
-{
-    uint64_t Address;
-    tPACKET_CONTROL_FIELD Packet_Control_Field;
-    uint8_t Payload[32];
-}tMsgFrame;
-}
 #endif // NRF24BITS_STRUCT_H_INCLUDED
